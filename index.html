@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="zh"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ede8df">
+<title>Voyage · 旅行分账</title>
+<link href="https://fonts.googleapis.com/css2?family=Fragment+Mono:ital@0;1&family=Homemade+Apple&display=swap" rel="stylesheet">
+<style>
+/* preview/tokens.css · 与 miniprogram/styles/tokens.wxss 保持一致
+   改这里必须同步改 wxss，反之亦然 */
+
+:root{
+  /* 纸基 */
+  --paper:#ede8df; --paper-alt:#e4dfd3; --card:#f7f4ef; --white:#fff;
+  /* 墨色 */
+  --ink:#1c1a17; --ink-mid:#5c5348; --ink-soft:#9a948c; --ink-faint:#c4bbb0;
+  --rule:#c4bbb0; --rule-soft:rgba(28,26,23,.14);
+  /* 橙 —— 色域，不是点缀 */
+  --orange:#b85c3c; --orange-press:#a45032;
+  --on-orange:#fdfaf5; --on-orange-soft:rgba(253,250,245,.66);
+  --rule-on-orange:rgba(253,250,245,.22);
+  /* 语义：应付=赭，应收=墨 */
+  --owe:#b85c3c; --owed:#1c1a17; --settled:#9a948c;
+  /* 成员色点 */
+  --tag-1:#8a6a4f; --tag-2:#5f7a72; --tag-3:#7b6585;
+  --tag-4:#8a7442; --tag-5:#6b7285; --tag-6:#87574f;
+
+  --font-mono:"Fragment Mono",ui-monospace,monospace;
+  --font-hand:"Homemade Apple",cursive;
+
+  --fs-hero:38px;   /* 页面标题 */
+  --fs-total:42px;  /* 唯一主角数字 */
+  --fs-amount:16px; /* 账目行金额 */
+  --fs-stat:15px;   /* 明细数字 */
+  --fs-body:14px; --fs-sub:12px; --fs-label:10px;
+
+  --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:20px;
+  --sp-6:24px;--sp-8:32px;--sp-10:40px;--sp-12:52px;
+  --pad-x:24px; --r-sm:2px; --r-md:4px; --r-pill:999px;
+
+  --sh-flat:0 2px 4px rgba(80,20,0,.06);
+  --sh-card:0 8px 20px rgba(80,20,0,.12);
+  --sh-raise:0 12px 28px rgba(80,20,0,.18);
+
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  --dur-fast:140ms; --dur-base:240ms; --dur-slow:420ms;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-mono);
+  font-size:var(--fs-body);line-height:1.55;-webkit-font-smoothing:antialiased;
+  overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+
+/* 手机框（仅 demo 用，小程序里不需要）*/
+.screen{width:390px;min-height:844px;margin:0 auto;max-width:100%;background:var(--paper);
+  position:relative;overflow:hidden;padding-bottom:88px}
+.grain{position:absolute;inset:0;pointer-events:none;z-index:30;opacity:.05;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E")}
+
+/* ── 排版原语 ── */
+.label{font-size:var(--fs-label);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+.label--on-orange{color:var(--on-orange-soft)}
+.label-cn{font-size:var(--fs-label);letter-spacing:.18em;color:var(--ink-soft)}
+.num{font-variant-numeric:tabular-nums;letter-spacing:-.01em;line-height:1.05}
+.num--total{font-size:var(--fs-total);letter-spacing:-.025em}
+.num--amount{font-size:var(--fs-amount)}
+.num--stat{font-size:var(--fs-stat)}
+.num--owe{color:var(--owe)} .num--owed{color:var(--owed)}
+.num--settled{color:var(--settled);text-decoration:line-through}
+.cur{font-size:.5em;opacity:.55;margin-right:2px}
+.dec{font-size:.62em;opacity:.7}
+.hand{font-family:var(--font-hand)}
+.text-sub{font-size:var(--fs-sub);color:var(--ink-mid)}
+.text-faint{color:var(--ink-soft)}
+
+/* ── 色域块 ── */
+.zone-paper{background:var(--paper);padding:var(--sp-8) var(--pad-x) var(--sp-12)}
+.zone-orange{background:var(--orange);color:var(--on-orange);
+  padding:var(--sp-8) var(--pad-x) var(--sp-6)}
+.hero-title{font-size:var(--fs-hero);line-height:1;letter-spacing:-.02em;
+  text-transform:uppercase;color:var(--orange);display:block}
+
+/* ── 票据细节 ── */
+.perf{height:1px;background-image:repeating-linear-gradient(to right,var(--rule) 0 4px,transparent 4px 9px)}
+.rule{height:1px;background:var(--rule-soft)}
+
+/* ── 顶栏 ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;
+  padding:var(--sp-6) var(--pad-x) var(--sp-4)}
+.topbar__back{font-size:18px;color:var(--ink);width:24px}
+.topbar__title{font-size:var(--fs-label);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+.topbar__act{font-size:var(--fs-label);letter-spacing:.12em;text-transform:uppercase;color:var(--orange)}
+
+/* ── 按钮 ── */
+.btn{display:flex;align-items:center;justify-content:center;height:46px;
+  border-radius:var(--r-pill);font-size:13px;letter-spacing:.06em;
+  font-family:var(--font-mono);border:none;cursor:pointer;
+  transition:transform var(--dur-fast) var(--ease-out),background var(--dur-fast) var(--ease-out)}
+.btn:active{transform:scale(.985)}
+.btn--white{background:var(--white);color:var(--orange);box-shadow:var(--sh-card)}
+.btn--orange{background:var(--orange);color:var(--on-orange);box-shadow:var(--sh-card)}
+.btn--outline{background:transparent;color:var(--ink);border:1px solid var(--rule)}
+.btn--text{background:transparent;color:var(--ink-mid);height:44px}
+
+/* ── 成员色点 ── */
+.dot{width:8px;height:8px;border-radius:var(--r-pill);flex-shrink:0;display:inline-block}
+.dot--lg{width:10px;height:10px}
+
+/* ── chip ── */
+.chip{display:inline-flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);
+  border-radius:var(--r-pill);border:1px solid var(--rule);background:transparent;
+  font-size:var(--fs-sub);font-family:var(--font-mono);color:var(--ink-mid);cursor:pointer;
+  transition:all var(--dur-fast) var(--ease-out)}
+.chip--on{border-color:var(--orange);background:var(--orange);color:var(--on-orange)}
+
+.badge-cur{font-size:10px;letter-spacing:.12em;padding:3px 6px;border:1px solid var(--rule);
+  border-radius:var(--r-sm);color:var(--ink-mid)}
+
+/* ── 账目行 ── */
+.expense-row{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) 0;
+  border-bottom:1px solid var(--rule-soft);cursor:pointer}
+.expense-row:active{background:var(--paper-alt)}
+.expense-row__main{flex:1;min-width:0;overflow:hidden}
+.expense-row__name{font-size:var(--fs-body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.expense-row__meta{font-size:var(--fs-label);letter-spacing:.06em;color:var(--ink-soft);margin-top:3px;
+  display:flex;align-items:center;gap:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.expense-row__amt{flex-shrink:0;text-align:right}
+.thumb{width:34px;height:34px;border-radius:var(--r-sm);background:var(--paper-alt);
+  box-shadow:var(--sh-flat);flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:16px;color:var(--ink-faint)}
+
+/* ── 日期分组 ── */
+.day-group{margin-bottom:var(--sp-8)}
+.day-group__head{display:flex;align-items:baseline;justify-content:space-between;padding-bottom:var(--sp-2)}
+
+/* ── 明细统计条 ── */
+.stats{display:flex;border-top:1px solid var(--rule-soft)}
+.stat{flex:1;padding:var(--sp-4) 0;display:flex;flex-direction:column;gap:var(--sp-2)}
+.stat+.stat{border-left:1px solid var(--rule-soft);padding-left:var(--sp-4)}
+
+/* ── 输入 ── */
+.field{background:transparent;border:none;border-bottom:1px solid var(--rule);
+  padding:var(--sp-3) 0;font-family:var(--font-mono);font-size:var(--fs-body);
+  color:var(--ink);width:100%;outline:none}
+.field:focus{border-color:var(--orange)}
+.field--amount{font-size:48px;font-variant-numeric:tabular-nums;letter-spacing:-.03em;
+  text-align:right;border-bottom:2px solid var(--ink);padding:var(--sp-2) 0}
+
+/* ── 低置信标记（OCR）── */
+.uncertain{background:rgba(255,72,0,.08);border-bottom:1px dashed var(--orange)!important}
+.uncertain__hint{font-size:var(--fs-label);letter-spacing:.06em;color:var(--orange)}
+
+.empty{padding:var(--sp-12) var(--sp-6);text-align:center;color:var(--ink-soft)}
+.sign{display:block;text-align:center;margin-top:var(--sp-10);font-size:17px;color:var(--ink-faint)}
+
+/* ── 底部悬浮记账（tabbar 替代）── */
+.fab{position:fixed;bottom:0;left:0;right:0;width:100%;max-width:390px;margin:0 auto;
+  padding:var(--sp-4) var(--pad-x) var(--sp-6);
+  background:linear-gradient(to top,var(--paper) 60%,rgba(237,232,223,0));z-index:40}
+
+/* ── 动效 ── */
+@keyframes reveal-up{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.reveal{animation:reveal-up var(--dur-slow) var(--ease-out) both}
+.reveal--1{animation-delay:60ms}.reveal--2{animation-delay:120ms}.reveal--3{animation-delay:180ms}
+
+/* ==========================================================================
+   旅游母题：邮票齿孔 / 邮戳 / 风景线稿
+   参照：日本国铁硬券、航空信封边、旧护照落地章
+   纪律：全部单色线稿，不引入新颜色；装饰不抢数字
+   ========================================================================== */
+
+/* ── 邮票齿孔边 ──
+   用 radial-gradient 打半圆缺口，四边齿孔 */
+.stamp{
+  position:relative;background:var(--card);
+  padding:var(--sp-4);
+  --pf:7px;   /* 齿孔直径 */
+  --pg:11px;  /* 齿距 */
+  -webkit-mask:
+    radial-gradient(circle var(--pf) at 50% 0,transparent 99%,#000) 0 0/var(--pg) 100% repeat-x,
+    radial-gradient(circle var(--pf) at 50% 100%,transparent 99%,#000) 0 100%/var(--pg) 100% repeat-x,
+    radial-gradient(circle var(--pf) at 0 50%,transparent 99%,#000) 0 0/100% var(--pg) repeat-y,
+    radial-gradient(circle var(--pf) at 100% 50%,transparent 99%,#000) 100% 0/100% var(--pg) repeat-y;
+  -webkit-mask-composite:source-in;
+  mask-composite:intersect;
+}
+/* 橙区里的邮票 */
+.stamp--on-orange{background:var(--on-orange)}
+
+/* ── 邮戳（圆形印章，盖在角上）── */
+.postmark{
+  width:62px;height:62px;border-radius:50%;
+  border:1.5px solid currentColor;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:1px;opacity:.32;transform:rotate(-11deg);
+  flex-shrink:0;pointer-events:none;
+}
+.postmark__city{font-size:7px;letter-spacing:.16em;text-transform:uppercase;line-height:1}
+.postmark__line{width:26px;height:1px;background:currentColor;opacity:.6}
+.postmark__date{font-size:8px;letter-spacing:.08em;font-variant-numeric:tabular-nums;line-height:1}
+.postmark--sm{width:48px;height:48px}
+.postmark--sm .postmark__city{font-size:6px}
+.postmark--sm .postmark__date{font-size:7px}
+
+/* ── 航空信封斜条边（红蓝改为单色赭）── */
+.airmail{
+  height:5px;
+  background:repeating-linear-gradient(
+    -45deg,
+    var(--orange) 0 6px,
+    transparent 6px 12px,
+    var(--ink-faint) 12px 18px,
+    transparent 18px 24px
+  );
+  opacity:.5;
+}
+
+/* ── 风景线稿图标（inline svg，currentColor 继承）── */
+.ico{width:1em;height:1em;display:inline-block;vertical-align:-.12em;
+  fill:none;stroke:currentColor;stroke-width:1.4;
+  stroke-linecap:round;stroke-linejoin:round}
+.ico--lg{width:22px;height:22px;stroke-width:1.2}
+.ico--xl{width:34px;height:34px;stroke-width:1}
+
+/* 凭证缩略图改为线稿容器 */
+.thumb--ico{display:flex;align-items:center;justify-content:center;
+  color:var(--ink-soft);background:var(--paper-alt)}
+
+/* ── 票根撕口（左右半圆缺口）── */
+.stub{position:relative;background:var(--card);border-radius:var(--r-md)}
+.stub::before,.stub::after{
+  content:"";position:absolute;top:50%;width:12px;height:12px;
+  border-radius:50%;background:var(--paper);transform:translateY(-50%);
+}
+.stub::before{left:-6px}
+.stub::after{right:-6px}
+
+/* ── 目的地缩略风景带（页眉装饰）── */
+.skyline{height:40px;color:var(--ink-faint);opacity:.55;
+  display:flex;align-items:flex-end;overflow:hidden}
+.skyline svg{width:100%;height:100%;fill:none;stroke:currentColor;
+  stroke-width:1.2;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.skyline svg use{fill:none;stroke:currentColor}
+.skyline--on-orange{color:var(--on-orange);opacity:.28}
+
+/* ══════════ 交互 demo 补充组件 ══════════ */
+.hero__row{display:flex;justify-content:space-between;align-items:flex-end}
+.hero__mark{width:24px;height:24px;border-radius:var(--r-pill);background:var(--orange);
+  display:flex;align-items:center;justify-content:center;color:var(--on-orange)}
+.hero__mark .ico{width:13px;height:13px}
+.hero{padding:var(--sp-6) var(--pad-x)}
+.hero--settle{padding-bottom:var(--sp-8)}
+.hero__trip{margin-top:var(--sp-4);font-size:var(--fs-body);color:var(--ink)}
+.hero__meta{margin-top:5px;font-size:12px;letter-spacing:.06em;color:var(--ink-soft)}
+
+/* 首页进行中卡 */
+.act{background:var(--orange);color:var(--on-orange);position:relative;overflow:hidden;
+  padding:var(--sp-6) var(--pad-x) 0;cursor:pointer}
+.act__top{display:flex;justify-content:space-between;align-items:flex-start}
+.act__name{font-size:20px;letter-spacing:-.01em;line-height:1.25}
+.act__num{margin-top:var(--sp-5);font-size:32px;letter-spacing:-.025em;line-height:1}
+.act__lbl{margin-top:6px;font-size:var(--fs-label);letter-spacing:.12em;
+  text-transform:uppercase;color:var(--on-orange-soft)}
+.act__foot{margin-top:var(--sp-5);padding-top:var(--sp-3);border-top:1px solid var(--rule-on-orange);
+  display:flex;justify-content:space-between;align-items:center}
+.act__bal{font-size:var(--fs-sub)}
+.act__dots{display:flex;gap:4px}
+.act__dots .dot{background:var(--on-orange);opacity:.8}
+.act__sky{margin-top:var(--sp-4);height:34px}
+
+.past{padding:var(--sp-8) var(--pad-x) 0}
+.past__list{margin-top:var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-3)}
+.pr{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) var(--sp-4);
+  background:var(--card);border-radius:var(--r-md);box-shadow:var(--sh-flat);cursor:pointer}
+.pr__ico{color:var(--ink-soft);flex-shrink:0}
+.pr__main{flex:1;min-width:0}
+.pr__name{font-size:var(--fs-body)}
+.pr__meta{font-size:var(--fs-label);letter-spacing:.06em;color:var(--ink-soft);margin-top:2px}
+.pr__right{text-align:right;flex-shrink:0}
+.pr__amt{font-size:var(--fs-sub);font-variant-numeric:tabular-nums;color:var(--ink-mid)}
+.pr__tag{font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);
+  border:1px solid var(--rule);border-radius:var(--r-sm);padding:1px 4px;margin-top:3px;display:inline-block}
+
+/* 账本概览 */
+.ov{background:var(--orange);color:var(--on-orange);position:relative;overflow:hidden;
+  padding:var(--sp-5) var(--pad-x) 0}
+.ov__top{display:flex;justify-content:space-between;align-items:flex-start}
+.ov__name{font-size:19px;letter-spacing:-.01em}
+.ov__meta{margin-top:4px}
+.ov__num{margin-top:var(--sp-5);font-size:34px;letter-spacing:-.025em;line-height:1}
+.ov__row{margin-top:var(--sp-5);padding-top:var(--sp-3);border-top:1px solid var(--rule-on-orange);
+  display:flex;gap:var(--sp-4)}
+.ov__cell{flex:1;min-width:0}
+.ov__cell i{font-size:var(--fs-label);letter-spacing:.12em;text-transform:uppercase;
+  color:var(--on-orange-soft);font-style:normal;display:block}
+.ov__cell b{font-size:14px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;
+  display:block;white-space:nowrap;margin-top:3px;font-weight:400}
+.ov__sky{margin-top:var(--sp-4);height:30px}
+
+.tabs{display:flex;gap:var(--sp-2);padding:var(--sp-5) var(--pad-x) 0}
+.tl{padding:var(--sp-6) var(--pad-x) 0}
+.day__date{font-size:var(--fs-label);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+.day__sum{font-size:var(--fs-sub);font-variant-numeric:tabular-nums;color:var(--ink-mid)}
+.day__city{font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);
+  border:1px solid var(--rule);border-radius:var(--r-sm);padding:1px 4px;margin-left:5px}
+.payer{color:var(--ink-mid)}
+.src{font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)}
+.amt2{font-size:var(--fs-label);letter-spacing:.04em;color:var(--ink-soft);
+  margin-top:2px;font-variant-numeric:tabular-nums}
+.bar{height:2px;background:var(--rule-soft);margin:0 0 var(--sp-2)}
+.bar i{display:block;height:100%;background:var(--orange);opacity:.6}
+
+/* 按人视图 */
+.mrow{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-4) 0;
+  border-bottom:1px solid var(--rule-soft)}
+.mrow__main{flex:1;min-width:0}
+.mrow__n{font-size:var(--fs-body)}
+.mrow__s{font-size:var(--fs-label);letter-spacing:.04em;color:var(--ink-soft);margin-top:2px}
+.mrow__net{font-size:15px;flex-shrink:0}
+
+/* 记账页 */
+.body{padding:var(--sp-5) var(--pad-x) 0}
+.amt{display:flex;align-items:flex-end;gap:var(--sp-3);border-bottom:2px solid var(--ink);
+  padding-bottom:var(--sp-3)}
+.amt__cur{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;cursor:pointer;flex-shrink:0}
+.amt__cur i{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft);font-style:normal}
+.amt__cur b{font-size:var(--fs-sub);letter-spacing:.06em;color:var(--ink);
+  border-bottom:1px solid var(--rule);padding-bottom:1px;white-space:nowrap;font-weight:400}
+.amt__in{flex:1;font-size:38px;font-variant-numeric:tabular-nums;letter-spacing:-.03em;
+  text-align:right;border:none;background:transparent;outline:none;
+  font-family:var(--font-mono);color:var(--ink);line-height:1.1;min-width:0;padding:0}
+.amt__in::placeholder{color:var(--ink-faint)}
+.amt__conv{margin-top:var(--sp-2);text-align:right;font-size:var(--fs-label);
+  letter-spacing:.06em;color:var(--ink-soft);min-height:14px}
+
+.ways{display:flex;gap:var(--sp-2);margin-top:var(--sp-6)}
+.way{flex:1;aspect-ratio:1;border:1px solid var(--rule);border-radius:var(--r-md);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  cursor:pointer;transition:all var(--dur-fast) var(--ease-out)}
+.way:active{background:var(--paper-alt)}
+.way--on{border-color:var(--orange);background:rgba(184,92,60,.07)}
+.way__ico{color:var(--ink-soft)}
+.way--on .way__ico{color:var(--orange)}
+.way__txt{font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.way--on .way__txt{color:var(--orange)}
+
+.sec{margin-top:var(--sp-6)}
+.sec__hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--sp-3)}
+.lnk{color:var(--orange);cursor:pointer}
+.row{display:flex;align-items:center;justify-content:space-between;padding:var(--sp-3) 0;
+  border-bottom:1px solid var(--rule-soft);cursor:pointer}
+.row--in{cursor:text}
+.row__k{font-size:var(--fs-sub);color:var(--ink-soft);letter-spacing:.04em;flex-shrink:0}
+.row__v{font-size:var(--fs-body);display:flex;align-items:center;gap:6px}
+.row__v .arw{color:var(--ink-faint);font-size:12px}
+.row__in{flex:1;text-align:right;border:none;background:transparent;outline:none;
+  font-family:var(--font-mono);font-size:var(--fs-body);color:var(--ink);min-width:0}
+.row__in::placeholder{color:var(--ink-faint)}
+.chips{display:flex;flex-wrap:wrap;gap:var(--sp-2)}
+
+.split{margin-top:var(--sp-4);padding:var(--sp-4) var(--sp-5);background:var(--card);
+  border-radius:var(--r-md);box-shadow:var(--sh-flat)}
+.split__row{display:flex;justify-content:space-between;padding:4px 0;font-size:var(--fs-sub)}
+.split__note{margin-top:var(--sp-2);padding-top:var(--sp-2);border-top:1px solid var(--rule-soft);
+  font-size:var(--fs-label);letter-spacing:.04em;color:var(--orange)}
+.note{width:100%;background:transparent;border:none;border-bottom:1px solid var(--rule-soft);
+  padding:var(--sp-3) 0;font-family:var(--font-mono);font-size:var(--fs-body);color:var(--ink);outline:none}
+.note::placeholder{color:var(--ink-faint)}
+.danger{color:var(--orange)}
+.is-off{opacity:.3;pointer-events:none}
+
+/* 确认页 */
+.shotwrap{position:relative;margin-bottom:var(--sp-5)}
+.shot{height:132px;background:var(--paper-alt);display:flex;align-items:center;justify-content:center;
+  position:relative;--pf:6px;--pg:10px;
+  -webkit-mask:radial-gradient(circle var(--pf) at 50% 0,transparent 99%,#000) 0 0/var(--pg) 100% repeat-x,
+    radial-gradient(circle var(--pf) at 50% 100%,transparent 99%,#000) 0 100%/var(--pg) 100% repeat-x,
+    radial-gradient(circle var(--pf) at 0 50%,transparent 99%,#000) 0 0/100% var(--pg) repeat-y,
+    radial-gradient(circle var(--pf) at 100% 50%,transparent 99%,#000) 100% 0/100% var(--pg) repeat-y;
+  -webkit-mask-composite:source-in;mask-composite:intersect}
+.shot__ico{color:var(--ink-faint)}
+.shot__tag{position:absolute;top:10px;left:12px;font-size:8px;letter-spacing:.12em;
+  text-transform:uppercase;background:var(--ink);color:var(--paper);padding:3px 6px;border-radius:var(--r-sm)}
+.shot__re{position:absolute;bottom:12px;left:12px;font-size:8px;letter-spacing:.12em;
+  text-transform:uppercase;background:rgba(255,255,255,.9);color:var(--ink);padding:4px 8px;border-radius:var(--r-pill)}
+.shot__pm{position:absolute;right:10px;bottom:-14px;color:var(--ink-soft);z-index:2;
+  background:var(--paper);border-radius:50%}
+.heard{padding:var(--sp-4);background:var(--card);border-radius:var(--r-md);box-shadow:var(--sh-flat);
+  font-size:var(--fs-sub);color:var(--ink-mid);display:flex;gap:var(--sp-2);align-items:flex-start;line-height:1.6}
+.heard .ico{flex-shrink:0;margin-top:3px;color:var(--orange)}
+.conf{margin-top:var(--sp-5);padding:var(--sp-3) var(--sp-4);background:rgba(184,92,60,.08);
+  border-left:2px solid var(--orange)}
+.conf--ok{background:var(--paper-alt);border-left-color:var(--rule)}
+.conf__t{font-size:var(--fs-sub);color:var(--ink)}
+.conf__s{margin-top:3px;font-size:var(--fs-label);letter-spacing:.04em;color:var(--ink-mid);line-height:1.6}
+.fields{margin-top:var(--sp-5)}
+.f{padding:var(--sp-4) 0;border-bottom:1px solid var(--rule-soft)}
+.f__hd{display:flex;justify-content:space-between;align-items:baseline}
+.f__k{font-size:var(--fs-label);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+.f__badge{font-size:8px;letter-spacing:.1em;text-transform:uppercase;padding:2px 6px;border-radius:var(--r-sm)}
+.f__badge--low{background:var(--orange);color:var(--on-orange)}
+.f__badge--ok{color:var(--ink-faint);border:1px solid var(--rule)}
+.f__v{margin-top:6px;font-size:17px;font-variant-numeric:tabular-nums}
+.f__v--flag{background:rgba(184,92,60,.11);border-bottom:1px dashed var(--orange);
+  display:inline-block;padding:1px 4px}
+.f__alt{margin-top:7px;display:flex;gap:6px;flex-wrap:wrap}
+.f__opt{font-size:var(--fs-label);letter-spacing:.04em;padding:4px 9px;border:1px solid var(--rule);
+  border-radius:var(--r-pill);color:var(--ink-mid);cursor:pointer}
+.f__opt--on{border-color:var(--orange);background:var(--orange);color:var(--on-orange)}
+.items{margin-top:var(--sp-8)}
+.item{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3) 0;
+  border-bottom:1px solid var(--rule-soft)}
+.item__n{flex:1;font-size:var(--fs-sub);min-width:0}
+.item__p{font-size:var(--fs-sub);font-variant-numeric:tabular-nums;color:var(--ink-mid);flex-shrink:0}
+.item__who{display:flex;gap:5px;flex-shrink:0}
+.item__who .dot{opacity:.22;cursor:pointer;width:10px;height:10px;
+  transition:opacity var(--dur-fast) var(--ease-out)}
+.item__who .dot--on{opacity:1}
+.hint{margin-top:var(--sp-3);font-size:var(--fs-label);letter-spacing:.04em;
+  color:var(--ink-soft);line-height:1.7}
+.hint--warn{margin-top:var(--sp-4);padding:var(--sp-3) var(--sp-4);background:var(--paper-alt);
+  border-radius:var(--r-md);color:var(--ink-mid)}
+
+/* 结算页 */
+.band{background:var(--orange);color:var(--on-orange);position:relative;overflow:hidden;
+  padding:var(--sp-8) var(--pad-x) 0}
+.band__top{display:flex;justify-content:space-between;align-items:flex-start}
+.band__total{margin-top:var(--sp-3);font-size:42px;line-height:1;letter-spacing:-.025em}
+.band__percap{margin-top:var(--sp-3);font-size:12px;letter-spacing:.06em;color:var(--on-orange-soft)}
+.band__sky{margin-top:var(--sp-5);height:30px}
+.plan{margin-top:var(--sp-8)}
+.plan__head{display:flex;justify-content:space-between;align-items:baseline;
+  padding-bottom:var(--sp-3);border-bottom:1px solid var(--rule-on-orange)}
+.plan__note{margin-top:var(--sp-4);font-size:12px;letter-spacing:.06em;color:var(--on-orange-soft)}
+.plan__btn{margin-top:var(--sp-6)}
+.tx__amt{flex:1;text-align:right;font-size:16px}
+.foot{padding:var(--sp-8) var(--pad-x) var(--sp-12)}
+.stat__num{font-size:15px}
+.settle__mark{margin-top:var(--sp-6)}
+.foot .perf{margin:var(--sp-8) 0 var(--sp-6)}
+.rates{display:flex;flex-direction:column;gap:var(--sp-3)}
+.rate{display:flex;align-items:center;gap:var(--sp-3)}
+.rate__code{font-size:10px;letter-spacing:.12em;padding:3px 6px;border:1px solid var(--rule);
+  border-radius:var(--r-sm);color:var(--ink-mid)}
+.rate__val{font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink-mid)}
+.rates__hint{margin-top:var(--sp-2);font-size:var(--fs-label);line-height:1.6;color:var(--ink-soft)}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:104px;transform:translate(-50%,8px);
+  background:var(--ink);color:var(--paper);font-family:var(--font-mono);font-size:var(--fs-sub);
+  padding:11px 18px;border-radius:var(--r-pill);z-index:60;opacity:0;pointer-events:none;
+  transition:opacity var(--dur-base) var(--ease-out),transform var(--dur-base) var(--ease-out);
+  box-shadow:var(--sh-raise);max-width:80vw;text-align:center}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+.topbar__back,.topbar__act{cursor:pointer}
+.expense-row,.chip,.way,.row,.act,.pr{-webkit-user-select:none;user-select:none}
+
+/* ══════════════════════════════════════════════════════════
+   Voyage · 动效层
+   物理约束：纸不弹跳（禁 spring/bounce）。纸会盖章、会翻、会撕。
+   参照：邮局盖戳的力道、老式收银机出纸、护照落地章
+   ══════════════════════════════════════════════════════════ */
+
+/* ── 1. 邮戳盖章 ──
+   保存成功时砸下来。快下落 + 微反弹墨迹 + 停留后淡出 */
+@keyframes stamp-slam{
+  0%   {opacity:0;transform:translate(-50%,-50%) scale(2.6) rotate(-26deg)}
+  38%  {opacity:1;transform:translate(-50%,-50%) scale(.94) rotate(-9deg)}
+  46%  {transform:translate(-50%,-50%) scale(1.04) rotate(-12deg)}
+  54%  {transform:translate(-50%,-50%) scale(1) rotate(-11deg)}
+  76%  {opacity:1}
+  100% {opacity:0;transform:translate(-50%,-50%) scale(1.06) rotate(-11deg)}
+}
+@keyframes stamp-ink{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.2)}
+  40%{opacity:.14}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(2.2)}
+}
+.slam{position:fixed;left:50%;top:38%;z-index:80;pointer-events:none;
+  color:var(--orange);animation:stamp-slam 1250ms cubic-bezier(.16,.9,.3,1) both}
+.slam__ring{position:absolute;left:50%;top:50%;width:108px;height:108px;border-radius:50%;
+  background:var(--orange);animation:stamp-ink 700ms ease-out both}
+.slam .postmark{width:92px;height:92px;opacity:.86;border-width:2px;transform:none}
+.slam .postmark__city{font-size:11px;letter-spacing:.2em}
+.slam .postmark__line{width:44px}
+.slam .postmark__date{font-size:12px}
+.slam__amt{position:absolute;left:50%;top:calc(100% + 12px);transform:translateX(-50%);
+  font-family:var(--font-mono);font-size:13px;letter-spacing:.06em;color:var(--ink);
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* ── 2. 页面转场：纸张推入 ── */
+@keyframes page-in{
+  from{opacity:0;transform:translateX(14px)}
+  to{opacity:1;transform:translateX(0)}
+}
+@keyframes page-back{
+  from{opacity:0;transform:translateX(-14px)}
+  to{opacity:1;transform:translateX(0)}
+}
+.pg-fwd>*{animation:page-in 300ms var(--ease-out) both}
+.pg-back>*{animation:page-back 300ms var(--ease-out) both}
+
+/* ── 3. 数字滚动位（count-up 由 JS 驱动，这里只给微光）── */
+@keyframes num-tick{
+  0%{opacity:.55}
+  100%{opacity:1}
+}
+.ticking{animation:num-tick 120ms linear}
+
+/* ── 4. chip 墨点扩散 ── */
+.chip{position:relative;overflow:hidden}
+@keyframes ink-spread{
+  from{transform:translate(-50%,-50%) scale(0);opacity:.32}
+  to{transform:translate(-50%,-50%) scale(2.6);opacity:0}
+}
+.ink{position:absolute;width:70px;height:70px;border-radius:50%;
+  background:var(--orange);pointer-events:none;
+  animation:ink-spread 480ms var(--ease-out) both}
+.chip--on .ink{background:var(--on-orange)}
+
+/* ── 5. 账目行：按下时纸张下压 ── */
+.expense-row{transition:transform var(--dur-fast) var(--ease-out),
+  background var(--dur-fast) var(--ease-out)}
+.expense-row:active{transform:translateX(3px);background:var(--paper-alt)}
+
+/* 新增行落下 */
+@keyframes row-drop{
+  0%{opacity:0;transform:translateY(-10px);max-height:0}
+  100%{opacity:1;transform:translateY(0);max-height:120px}
+}
+.row-new{animation:row-drop 420ms var(--ease-out) both}
+
+/* ── 6. 结算：票据撕开 + 逐行落下 ── */
+@keyframes tear{
+  0%{clip-path:inset(0 0 100% 0)}
+  100%{clip-path:inset(0 0 0 0)}
+}
+.band{animation:tear 620ms cubic-bezier(.3,.8,.2,1) both}
+@keyframes tx-land{
+  0%{opacity:0;transform:translateY(-7px)}
+  70%{opacity:1}
+  100%{opacity:1;transform:translateY(0)}
+}
+.tx{animation:tx-land 380ms var(--ease-out) both}
+.tx:nth-child(2){animation-delay:180ms}
+.tx:nth-child(3){animation-delay:270ms}
+.tx:nth-child(4){animation-delay:360ms}
+.tx:nth-child(5){animation-delay:450ms}
+.tx:nth-child(6){animation-delay:540ms}
+.plan__note{animation:tx-land 380ms var(--ease-out) 640ms both}
+
+/* ── 7. 天际线：缓慢横移（列车窗外）── */
+@keyframes drift{
+  from{transform:translateX(0)}
+  to{transform:translateX(-24px)}
+}
+.skyline svg{animation:drift 26s linear infinite alternate}
+
+/* ── 8. 语音波形 ── */
+.wave{display:flex;align-items:center;gap:3px;height:22px}
+.wave i{width:2px;background:var(--orange);border-radius:1px;
+  animation:wv 900ms ease-in-out infinite}
+@keyframes wv{
+  0%,100%{height:4px;opacity:.4}
+  50%{height:20px;opacity:1}
+}
+.wave i:nth-child(1){animation-delay:0ms}
+.wave i:nth-child(2){animation-delay:110ms}
+.wave i:nth-child(3){animation-delay:220ms}
+.wave i:nth-child(4){animation-delay:80ms}
+.wave i:nth-child(5){animation-delay:300ms}
+.wave i:nth-child(6){animation-delay:160ms}
+.wave i:nth-child(7){animation-delay:240ms}
+.wave i:nth-child(8){animation-delay:40ms}
+.wave i:nth-child(9){animation-delay:280ms}
+
+/* 录音浮层 */
+.rec{position:fixed;inset:0;z-index:70;background:rgba(28,26,23,.42);
+  display:flex;align-items:center;justify-content:center;
+  animation:fade-in 200ms var(--ease-out) both}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+.rec__card{background:var(--paper);padding:var(--sp-8) var(--sp-6);border-radius:var(--r-md);
+  box-shadow:var(--sh-raise);text-align:center;width:250px;
+  animation:page-in 260ms var(--ease-out) both}
+.rec__t{font-size:var(--fs-label);letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-soft);margin-bottom:var(--sp-5)}
+.rec__wave{justify-content:center;margin-bottom:var(--sp-5)}
+.rec__hint{font-size:var(--fs-sub);color:var(--ink-mid);line-height:1.7;min-height:42px}
+.rec__cap{margin-top:var(--sp-5);font-size:var(--fs-label);letter-spacing:.08em;color:var(--ink-faint)}
+
+/* ── 9. OCR 扫描线 ── */
+@keyframes scan{
+  0%{top:0;opacity:0}
+  10%{opacity:1}
+  90%{opacity:1}
+  100%{top:100%;opacity:0}
+}
+.scanning::after{content:"";position:absolute;left:0;right:0;height:2px;
+  background:linear-gradient(to right,transparent,var(--orange),transparent);
+  animation:scan 1100ms ease-in-out infinite;z-index:3}
+
+/* 字段逐个确认落位 */
+@keyframes fld-in{
+  from{opacity:0;transform:translateY(-5px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.f{animation:fld-in 300ms var(--ease-out) both}
+.f:nth-child(2){animation-delay:70ms}
+.f:nth-child(3){animation-delay:140ms}
+.f:nth-child(4){animation-delay:210ms}
+
+/* 低置信字段呼吸 */
+@keyframes flag-pulse{
+  0%,100%{background:rgba(184,92,60,.09)}
+  50%{background:rgba(184,92,60,.19)}
+}
+.f__v--flag{animation:flag-pulse 2.4s ease-in-out infinite}
+
+/* ── 10. 逐项分账色点：点亮时墨点跳一下 ── */
+@keyframes dot-pop{
+  0%{transform:scale(1)}
+  40%{transform:scale(1.5)}
+  100%{transform:scale(1)}
+}
+.dot-pop{animation:dot-pop 260ms var(--ease-out)}
+
+/* ── 11. 归档：票据撕裂并飘走 ── */
+@keyframes archive-away{
+  0%{opacity:1;transform:translateY(0) rotate(0)}
+  100%{opacity:0;transform:translateY(-34px) rotate(-3deg)}
+}
+.archiving{animation:archive-away 620ms cubic-bezier(.4,0,.7,.2) both}
+
+/* ── 12. 首页卡片进场 ── */
+@keyframes card-rise{
+  from{opacity:0;transform:translateY(10px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.act{animation:card-rise 420ms var(--ease-out) both}
+.pr{animation:card-rise 380ms var(--ease-out) both}
+.pr:nth-child(2){animation-delay:80ms}
+.pr:nth-child(3){animation-delay:160ms}
+
+/* ── 13. 里程彩蛋（连点罗盘）── */
+.compass-spin{animation:spin 900ms cubic-bezier(.3,.8,.2,1)}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.hero__mark{cursor:pointer;transition:transform var(--dur-fast) var(--ease-out)}
+.hero__mark:active{transform:scale(.9)}
+
+.egg{position:fixed;left:50%;bottom:120px;transform:translateX(-50%) translateY(10px);
+  background:var(--card);border:1px solid var(--rule);border-radius:var(--r-md);
+  padding:var(--sp-4) var(--sp-5);z-index:75;box-shadow:var(--sh-raise);
+  opacity:0;transition:all 380ms var(--ease-out);max-width:280px;pointer-events:none}
+.egg.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.egg__t{font-size:var(--fs-label);letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-soft);margin-bottom:var(--sp-2)}
+.egg__n{font-family:var(--font-mono);font-size:26px;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;color:var(--orange);line-height:1}
+.egg__s{margin-top:var(--sp-2);font-size:var(--fs-sub);color:var(--ink-mid);line-height:1.6}
+
+/* ── 14. FAB 按下 ── */
+.fab .btn{transition:transform var(--dur-fast) var(--ease-out),
+  box-shadow var(--dur-fast) var(--ease-out)}
+.fab .btn:active{transform:translateY(1px) scale(.99);box-shadow:var(--sh-flat)}
+
+/* ── 15. 保存按钮就绪时的微光 ── */
+@keyframes ready{
+  0%,100%{box-shadow:var(--sh-card)}
+  50%{box-shadow:0 8px 24px rgba(184,92,60,.3)}
+}
+.btn--ready{animation:ready 2.2s ease-in-out infinite}
+
+/* ── 16. 长按记账：环形进度 ── */
+.hold{position:absolute;inset:-3px;border-radius:var(--r-pill);pointer-events:none}
+.hold circle{fill:none;stroke:var(--on-orange);stroke-width:2;opacity:.55;
+  stroke-dasharray:1000;stroke-dashoffset:1000;
+  transition:stroke-dashoffset 620ms linear}
+.holding circle{stroke-dashoffset:0}
+
+/* 减弱动效偏好 */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.01ms!important}
+}
+
+</style></head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none;position:absolute">
+
+  <!-- 富士山 / 山景 -->
+  <symbol id="i-mountain" viewBox="0 0 24 24">
+    <path d="M2 19h20L15 6l-4 7-2-2.5L2 19z"/>
+    <path d="M12.2 9.4l1.5 2.2 1.4-2.1"/>
+  </symbol>
+
+  <!-- 飞机 -->
+  <symbol id="i-plane" viewBox="0 0 24 24">
+    <path d="M3 13.5l18-6.5-3.5 9.5-4.5-2.5-3 4-1-4.5L3 13.5z"/>
+  </symbol>
+
+  <!-- 旅馆 / 温泉 -->
+  <symbol id="i-onsen" viewBox="0 0 24 24">
+    <path d="M4 20h16"/>
+    <path d="M5 20v-6c0-1.7 1.3-3 3-3h8c1.7 0 3 1.3 3 3v6"/>
+    <path d="M8.5 7.5c0-1.5 1.5-2 1.5-3.5M12 7.5c0-1.5 1.5-2 1.5-3.5M15.5 7.5c0-1.5 1.5-2 1.5-3.5"/>
+  </symbol>
+
+  <!-- 新干线 / 火车 -->
+  <symbol id="i-train" viewBox="0 0 24 24">
+    <rect x="5" y="4" width="14" height="13" rx="4"/>
+    <path d="M5 11h14M8.5 20l1.5-3M15.5 20L14 17"/>
+    <circle cx="9" cy="14" r=".6" fill="currentColor"/>
+    <circle cx="15" cy="14" r=".6" fill="currentColor"/>
+  </symbol>
+
+  <!-- 出租车 -->
+  <symbol id="i-taxi" viewBox="0 0 24 24">
+    <path d="M3 16v-3.5l2-4h14l2 4V16"/>
+    <path d="M3 16h18M6 16v2M18 16v2"/>
+    <path d="M9 8.5V6h6v2.5"/>
+    <circle cx="7.5" cy="13" r=".7" fill="currentColor"/>
+    <circle cx="16.5" cy="13" r=".7" fill="currentColor"/>
+  </symbol>
+
+  <!-- 拉面 / 餐饮 -->
+  <symbol id="i-ramen" viewBox="0 0 24 24">
+    <path d="M3.5 11h17c0 4.5-3.8 8-8.5 8s-8.5-3.5-8.5-8z"/>
+    <path d="M8 8c0-1.2.8-1.8.8-3M11.5 8c0-1.2.8-1.8.8-3M15 8c0-1.2.8-1.8.8-3"/>
+    <path d="M15 13l4-2.5"/>
+  </symbol>
+
+  <!-- 门票 -->
+  <symbol id="i-ticket" viewBox="0 0 24 24">
+    <path d="M3 8.5a2 2 0 002-2h14a2 2 0 002 2v2a2 2 0 000 3v2a2 2 0 00-2 2H5a2 2 0 00-2-2v-2a2 2 0 000-3v-2z"/>
+    <path d="M12 7v2M12 11.5v1M12 15v2" stroke-dasharray="0 0"/>
+  </symbol>
+
+  <!-- 小票 -->
+  <symbol id="i-receipt" viewBox="0 0 24 24">
+    <path d="M6 3h12v16l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3L6 21V3z"/>
+    <path d="M9 7.5h6M9 11h6M9 14.5h3"/>
+  </symbol>
+
+  <!-- 手机截图 -->
+  <symbol id="i-screenshot" viewBox="0 0 24 24">
+    <rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/>
+    <path d="M10.5 5.5h3"/>
+    <path d="M9 12l2.5 2.5L16 10"/>
+  </symbol>
+
+  <!-- 麦克风 -->
+  <symbol id="i-mic" viewBox="0 0 24 24">
+    <rect x="9.5" y="3" width="5" height="9" rx="2.5"/>
+    <path d="M6.5 11a5.5 5.5 0 0011 0M12 16.5V20M9 20h6"/>
+  </symbol>
+
+  <!-- 键盘 / 手动 -->
+  <symbol id="i-keyboard" viewBox="0 0 24 24">
+    <rect x="2.5" y="7" width="19" height="10" rx="2"/>
+    <path d="M6 10.5h.01M9 10.5h.01M12 10.5h.01M15 10.5h.01M18 10.5h.01M8 13.5h8"/>
+  </symbol>
+
+  <!-- 相机 -->
+  <symbol id="i-camera" viewBox="0 0 24 24">
+    <path d="M3 8.5h3l1.5-2h9L18 8.5h3v10H3v-10z"/>
+    <circle cx="12" cy="13" r="3.2"/>
+  </symbol>
+
+  <!-- 指南针 -->
+  <symbol id="i-compass" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M15.5 8.5l-2 5-5 2 2-5 5-2z"/>
+  </symbol>
+
+  <!-- 行李牌 -->
+  <symbol id="i-tag" viewBox="0 0 24 24">
+    <path d="M4 10l6-6h9v9l-6 6-9-9z"/>
+    <circle cx="15.5" cy="8.5" r="1.4"/>
+  </symbol>
+
+  <!-- 购物 -->
+  <symbol id="i-shop" viewBox="0 0 24 24">
+    <path d="M5 8h14l-1.2 12H6.2L5 8z"/>
+    <path d="M9 8V6a3 3 0 016 0v2"/>
+  </symbol>
+
+  <!-- 天际线（横向装饰带）-->
+  <symbol id="i-skyline" viewBox="0 0 390 40" preserveAspectRatio="none">
+    <path d="M0 40V28h14V19h9v9h11V13h13v15h8V22h16v18"/>
+    <path d="M71 40V16l11-8 11 8v24"/>
+    <path d="M78 24h8M78 30h8"/>
+    <path d="M104 40V25h10v-6h7v21"/>
+    <path d="M128 40V10h6v30M137 40V20h9v20"/>
+    <path d="M152 40l9-14 9 14"/>
+    <path d="M176 40V27h12V17h8v23"/>
+    <path d="M204 40V21l8-9 8 9v19"/>
+    <path d="M228 40V30h11V14h7v26"/>
+    <path d="M254 40l10-18 10 18"/>
+    <path d="M282 40V24h13v-8h6v24"/>
+    <path d="M308 40V12h5v28M316 40V23h10v17"/>
+    <path d="M333 40V28h11V18h8v22"/>
+    <path d="M360 40V22l9-8 9 8v18"/>
+    <path d="M0 40h390"/>
+  </symbol>
+
+</svg>
+<div class="screen">
+  <div class="grain"></div>
+  <div id="view"></div>
+  <div id="fab" class="fab"></div>
+</div>
+<script>
+/* Voyage · 交互 demo 逻辑 · part 1：内核 + 数据 + 状态 */
+
+/* ═══ 清算内核（与 miniprogram/utils/settle.js 同源）═══ */
+function computeNet(members, expenses){
+  const net={}; members.forEach(m=>net[m.id]=0);
+  expenses.forEach(e=>{
+    e.payers.forEach(p=>{ if(net[p.memberId]!==undefined) net[p.memberId]+=p.amount });
+    e.splits.forEach(s=>{ if(net[s.memberId]!==undefined) net[s.memberId]-=s.amount });
+  });
+  return net;
+}
+function settle(net){
+  const cred=[],deb=[];
+  Object.keys(net).forEach(id=>{const v=net[id];
+    if(v>0)cred.push({id,amount:v}); else if(v<0)deb.push({id,amount:-v})});
+  const out=[]; let g=0;
+  while(cred.length&&deb.length){
+    if(++g>10000) throw new Error('loop guard');
+    cred.sort((a,b)=>b.amount-a.amount); deb.sort((a,b)=>b.amount-a.amount);
+    const c=cred[0],d=deb[0],amt=Math.min(c.amount,d.amount);
+    out.push({from:d.id,to:c.id,amount:amt});
+    c.amount-=amt; d.amount-=amt;
+    if(!c.amount)cred.shift(); if(!d.amount)deb.shift();
+  }
+  return out;
+}
+function splitEqually(total, ids, remainderTo){
+  const n=ids.length; if(!n)return [];
+  const base=Math.floor(total/n); let rem=total-base*n;
+  const target=ids.indexOf(remainderTo)>=0?remainderTo:ids[0];
+  return ids.map(id=>{let a=base; if(id===target&&rem>0){a+=rem;rem=0} return {memberId:id,amount:a}});
+}
+const fmt=c=>{const neg=c<0,v=Math.abs(c);
+  return (neg?'-':'')+(v/100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',')};
+const fmtInt=c=>fmt(c).split('.')[0];
+const fmtDec=c=>fmt(c).split('.')[1];
+
+/* ═══ 数据 ═══ */
+const RATES={CNY:1,JPY:0.0492,USD:7.12,THB:0.198,EUR:7.78,HKD:0.912};
+const CAT=[
+  {id:'food',name:'餐饮',ico:'i-ramen'},{id:'stay',name:'住宿',ico:'i-onsen'},
+  {id:'move',name:'交通',ico:'i-train'},{id:'fly',name:'机票',ico:'i-plane'},
+  {id:'play',name:'门票',ico:'i-ticket'},{id:'shop',name:'购物',ico:'i-shop'},
+  {id:'taxi',name:'打车',ico:'i-taxi'},{id:'other',name:'其他',ico:'i-tag'},
+];
+const catOf=id=>CAT.find(c=>c.id===id)||CAT[7];
+
+function mk(id,name,cat,at,cur,amtOrig,payer,parts,src,paidOn){
+  const base=cur==='CNY'?amtOrig:Math.round(amtOrig*RATES[cur]);
+  return {id,name,cat,at,cur,amtOrig,rate:RATES[cur],amount:base,
+    payers:[{memberId:payer,amount:base}],
+    splits:splitEqually(base,parts,payer),src,paidOn:paidOn||'',note:''};
+}
+const MB=(i,n,c)=>({id:i,name:n,color:c});
+const DB={trips:[
+  {id:'t1',name:'东京 5 日',city:'Tokyo',base:'CNY',sym:'¥',
+   from:'2026-09-02',to:'2026-09-06',archived:false,
+   members:[MB('me','我','var(--tag-1)'),MB('li','小李','var(--tag-2)'),
+            MB('wang','小王','var(--tag-3)'),MB('zhang','张三','var(--tag-4)')],
+   expenses:[
+     mk('e1','寿司大 · 晚餐','food','2026-09-05T19:42','JPY',3700000,'me',['me','li','wang','zhang'],'ocr'),
+     mk('e2','出租车 · 涩谷→新宿','taxi','2026-09-05T22:10','CNY',14200,'li',['li','wang','zhang'],'voice'),
+     mk('e3','teamLab 门票','play','2026-09-05T13:00','CNY',88400,'me',['li','wang','zhang'],'shot'),
+     mk('e4','箱根温泉旅馆 · 2 晚','stay','2026-09-04T15:00','CNY',426800,'zhang',['me','li','wang','zhang'],'shot','2026-08-20'),
+     mk('e5','小田急浪漫号','move','2026-09-04T09:20','CNY',85200,'wang',['me','li','wang','zhang'],''),
+     mk('e6','CA167 · PVG→NRT ×4','fly','2026-09-02T08:00','CNY',451400,'me',['me','li','wang','zhang'],'shot','2026-07-28'),
+   ]},
+  {id:'t2',name:'大阪周末',city:'Osaka',base:'CNY',sym:'¥',
+   from:'2026-08-15',to:'2026-08-17',archived:true,
+   members:[MB('me','我','var(--tag-1)'),MB('li','小李','var(--tag-2)'),MB('wang','小王','var(--tag-3)')],
+   expenses:[mk('f1','道顿堀晚餐','food','2026-08-16T20:00','CNY',420600,'me',['me','li','wang'],'')]},
+  {id:'t3',name:'清迈',city:'Chiang Mai',base:'CNY',sym:'¥',
+   from:'2026-05-02',to:'2026-05-08',archived:true,
+   members:[MB('me','我','var(--tag-1)'),MB('li','小李','var(--tag-2)')],
+   expenses:[mk('g1','素贴山一日游','play','2026-05-04T09:00','THB',9555500,'me',['me','li'],'')]},
+]};
+
+/* ═══ 状态 ═══ */
+let S={route:'home',tripId:'t1',editing:null,toast:'',tab:'time'};
+const trip=()=>DB.trips.find(t=>t.id===S.tripId);
+var go=(r,p={})=>{Object.assign(S,{route:r},p); window.scrollTo(0,0); render()};
+var toast=function(msg){S.toast=msg; render();
+  clearTimeout(window.__tt); window.__tt=setTimeout(()=>{S.toast='';render()},1900)}
+
+/* ═══ 计算 ═══ */
+function stats(t){
+  const total=t.expenses.reduce((s,e)=>s+e.amount,0);
+  const per=t.members.length?Math.round(total/t.members.length):0;
+  const net=computeNet(t.members,t.expenses);
+  const paid=t.expenses.reduce((s,e)=>s+e.payers.filter(p=>p.memberId==='me').reduce((x,p)=>x+p.amount,0),0);
+  const share=t.expenses.reduce((s,e)=>s+e.splits.filter(x=>x.memberId==='me').reduce((x,y)=>x+y.amount,0),0);
+  return {total,per,net,paid,share,mine:net['me']||0,tx:settle(net)};
+}
+const nameOf=(t,id)=>(t.members.find(m=>m.id===id)||{}).name||'?';
+const colorOf=(t,id)=>(t.members.find(m=>m.id===id)||{}).color||'var(--ink-soft)';
+const DD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const dLabel=iso=>{const d=new Date(iso);
+  return `${MM[d.getMonth()]} ${String(d.getDate()).padStart(2,'0')} · ${DD[d.getDay()]}`};
+const md=iso=>{const d=new Date(iso);
+  return `${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`};
+const days=(a,b)=>Math.ceil((new Date(b)-new Date(a))/864e5)+1;
+
+/* ═══ 片段 ═══ */
+const ico=(n,cls='ico')=>`<svg class="${cls}"><use href="#${n}"/></svg>`;
+const pm=(city,date,cls='',color='')=>`<div class="postmark ${cls}"${color?` style="color:${color}"`:''}>
+  <span class="postmark__city">${city}</span><span class="postmark__line"></span>
+  <span class="postmark__date">${date}</span></div>`;
+const sky=cls=>`<div class="skyline ${cls}"><svg><use href="#i-skyline"/></svg></div>`;
+const money=(sym,c)=>`<span class="cur">${sym}</span>${fmtInt(c)}<span class="dec">.${fmtDec(c)}</span>`;
+
+/* part 2：首页 + 账本 */
+
+function vHome(){
+  const act=DB.trips.filter(t=>!t.archived), past=DB.trips.filter(t=>t.archived);
+  return `
+  <div class="hero">
+    <div class="hero__bar">
+      <div class="hero__mark">${ico('i-compass')}</div>
+      <span class="label">${DB.trips.length} trips · 2026</span>
+    </div>
+    <div class="hero__row">
+      <span class="hero-title">Trips</span>
+      ${pm('Voyage','2026','postmark--sm','var(--ink-soft)')}
+    </div>
+  </div>
+  <div class="airmail"></div>
+  ${act.map(t=>{
+    const st=stats(t), span=days(t.from,t.to);
+    const dn=Math.min(Math.max(Math.ceil((Date.now()-new Date(t.from))/864e5),1),span);
+    return `<div class="act" data-go="trip" data-id="${t.id}">
+      <div class="act__top">
+        <div><div class="act__name">${t.name}</div>
+        <div class="label label--on-orange" style="margin-top:5px">${t.city} · ${t.members.length} pax · day ${dn}/${span}</div></div>
+        ${pm('In trip',md(t.to),'postmark--sm','var(--on-orange)')}
+      </div>
+      <div class="num act__num">${money(t.sym,st.total)}</div>
+      <div class="act__lbl">Total spent</div>
+      <div class="act__foot">
+        <span class="act__bal">${st.mine>=0?'你应收':'你应付'} ${t.sym}${fmt(Math.abs(st.mine))}</span>
+        <div class="act__dots">${t.members.map(()=>`<span class="dot"></span>`).join('')}</div>
+      </div>
+      ${sky('skyline--on-orange act__sky')}
+    </div>`}).join('')}
+  ${act.length?'':'<div class="empty">没有进行中的行程</div>'}
+  <div class="past">
+    <span class="label">Past</span>
+    <div class="past__list">
+      ${past.map(t=>{const st=stats(t);
+        return `<div class="pr" data-go="trip" data-id="${t.id}">
+        ${ico(catOf(t.expenses[0]?t.expenses[0].cat:'other').ico,'ico ico--lg pr__ico')}
+        <div class="pr__main"><div class="pr__name">${t.name}</div>
+        <div class="pr__meta">${md(t.from)} — ${md(t.to)} · ${t.members.length} PAX</div></div>
+        <div class="pr__right"><div class="pr__amt">${t.sym}${fmt(st.total)}</div>
+        <span class="pr__tag">settled</span></div></div>`}).join('')}
+    </div>
+  </div>`;
+}
+
+function row(t,e){
+  const pid=e.payers[0].memberId;
+  const inSplit=e.splits.some(s=>s.memberId===pid);
+  return `<div class="expense-row" data-go="edit" data-id="${e.id}">
+    <div class="thumb thumb--ico">${ico(catOf(e.cat).ico,'ico ico--lg')}</div>
+    <div class="expense-row__main">
+      <div class="expense-row__name">${e.name}</div>
+      <div class="expense-row__meta">
+        <span class="dot" style="background:${colorOf(t,pid)}"></span>
+        <span class="payer">${nameOf(t,pid)}付</span> · ${e.splits.length}人摊${inSplit?'':'（未参与）'}
+        ${e.src?` · <span class="src">${e.src}</span>`:''}
+      </div>
+    </div>
+    <div class="expense-row__amt">
+      <div class="num num--amount"><span class="cur">${t.sym}</span>${fmt(e.amount)}</div>
+      ${e.cur!==t.base?`<div class="amt2">${fmt(e.amtOrig)} ${e.cur}</div>`
+        :e.paidOn?`<div class="amt2">付于 ${md(e.paidOn)}</div>`:''}
+    </div>
+  </div>`;
+}
+
+function vTrip(){
+  const t=trip(), st=stats(t), span=days(t.from,t.to);
+  const dn=Math.min(Math.max(Math.ceil((Date.now()-new Date(t.from))/864e5),1),span);
+  let list='';
+
+  if(S.tab==='time'){
+    const g={};
+    [...t.expenses].sort((a,b)=>b.at.localeCompare(a.at))
+      .forEach(e=>{const k=e.at.slice(0,10); (g[k]=g[k]||[]).push(e)});
+    list=Object.keys(g).sort().reverse().map(k=>{
+      const sum=g[k].reduce((s,e)=>s+e.amount,0);
+      return `<div class="day-group">
+        <div class="day-group__head">
+          <span class="day__date">${dLabel(k)}</span>
+          <span class="day__sum">${t.sym}${fmt(sum)}</span></div>
+        ${g[k].map(e=>row(t,e)).join('')}</div>`}).join('');
+  } else if(S.tab==='cat'){
+    const g={}; t.expenses.forEach(e=>{(g[e.cat]=g[e.cat]||[]).push(e)});
+    list=Object.keys(g).sort((a,b)=>
+      g[b].reduce((s,e)=>s+e.amount,0)-g[a].reduce((s,e)=>s+e.amount,0)).map(c=>{
+      const sum=g[c].reduce((s,e)=>s+e.amount,0);
+      const pct=st.total?Math.round(sum/st.total*100):0;
+      return `<div class="day-group">
+        <div class="day-group__head">
+          <div><span class="day__date">${catOf(c).name}</span><span class="day__city">${pct}%</span></div>
+          <span class="day__sum">${t.sym}${fmt(sum)}</span></div>
+        <div class="bar"><i style="width:${pct}%"></i></div>
+        ${g[c].map(e=>row(t,e)).join('')}</div>`}).join('');
+  } else {
+    list=`<div class="day-group">${t.members.map(m=>{
+      const paid=t.expenses.reduce((s,e)=>s+e.payers.filter(p=>p.memberId===m.id).reduce((x,p)=>x+p.amount,0),0);
+      const sh=t.expenses.reduce((s,e)=>s+e.splits.filter(x=>x.memberId===m.id).reduce((x,y)=>x+y.amount,0),0);
+      const n=st.net[m.id]||0;
+      return `<div class="mrow">
+        <span class="dot dot--lg" style="background:${m.color}"></span>
+        <div class="mrow__main"><div class="mrow__n">${m.name}</div>
+        <div class="mrow__s">垫付 ${t.sym}${fmt(paid)} · 应摊 ${t.sym}${fmt(sh)}</div></div>
+        <span class="num mrow__net ${n>=0?'num--owed':'num--owe'}">${n>=0?'+':'−'}${t.sym}${fmt(Math.abs(n))}</span>
+      </div>`}).join('')}</div>`;
+  }
+
+  return `
+  <div class="topbar">
+    <span class="topbar__back" data-go="home">←</span>
+    <span class="topbar__title">Ledger</span>
+    <span class="topbar__act" data-go="settle">结算</span>
+  </div>
+  <div class="airmail"></div>
+  <div class="ov">
+    <div class="ov__top">
+      <div><div class="ov__name">${t.name}</div>
+      <div class="label label--on-orange ov__meta">${md(t.from)} — ${md(t.to)} · ${t.members.length} PAX · DAY ${dn}</div></div>
+      ${pm(t.city,md(t.to),'postmark--sm','var(--on-orange)')}
+    </div>
+    <div class="num ov__num">${money(t.sym,st.total)}</div>
+    <div class="ov__row">
+      <div class="ov__cell"><i>人均</i><b>${t.sym}${fmt(st.per)}</b></div>
+      <div class="ov__cell"><i>我垫付</i><b>${t.sym}${fmt(st.paid)}</b></div>
+      <div class="ov__cell"><i>我${st.mine>=0?'应收':'应付'}</i><b>${t.sym}${fmt(Math.abs(st.mine))}</b></div>
+    </div>
+    ${sky('skyline--on-orange ov__sky')}
+  </div>
+  <div class="tabs">${[['time','时间轴'],['cat','按类目'],['who','按人']].map(([k,n])=>
+    `<div class="chip ${S.tab===k?'chip--on':''}" data-tab="${k}">${n}</div>`).join('')}</div>
+  <div class="tl">${list||'<div class="empty">还没有账目<br>点下方按钮记第一笔</div>'}</div>`;
+}
+
+/* part 3：记一笔 + 识别确认 */
+
+const CURS=['CNY','JPY','USD','THB','EUR','HKD'];
+
+function centsOf(d,t){
+  const c=Math.round(parseFloat(String(d.amountStr).replace(/,/g,'')||0)*100)||0;
+  return {orig:c, base:d.cur===t.base?c:Math.round(c*RATES[d.cur])};
+}
+function splitsOf(d,base){
+  return d.mode==='eq'?splitEqually(base,d.parts,d.payer)
+    :d.custom.filter(s=>d.parts.includes(s.memberId));
+}
+function remNote(t,base,d){
+  if(d.mode!=='eq'||!d.parts.length)return '';
+  const n=d.parts.length, r=base-Math.floor(base/n)*n;
+  if(!r)return '';
+  const inP=d.parts.includes(d.payer);
+  const tgt=inP?d.payer:d.parts[0];
+  return `<div class="split__note">除不尽的 ${t.sym}${fmt(r)} 归${inP?'付款人':''}「${nameOf(t,tgt)}」</div>`;
+}
+function splitBox(t,d){
+  const {base}=centsOf(d,t);
+  if(!base||!d.parts.length)return '';
+  const sp=splitsOf(d,base);
+  return sp.map(s=>`<div class="split__row"><span>${nameOf(t,s.memberId)}</span>
+    <span class="num">${t.sym}${fmt(s.amount)}</span></div>`).join('')+remNote(t,base,d);
+}
+
+function vAdd(){
+  const t=trip(), d=S.editing, {base}=centsOf(d,t), isEd=!!d.id;
+  return `
+  <div class="topbar">
+    <span class="topbar__back" data-go="trip">✕</span>
+    <span class="topbar__title">${isEd?'Edit expense':'New expense'}</span>
+    <span class="topbar__act ${base?'':'is-off'}" data-act="save">保存</span>
+  </div>
+  <div class="body">
+    <div class="amt">
+      <span class="amt__cur" data-act="cycle-cur"><i>currency</i><b>${d.cur} ▾</b></span>
+      <input class="amt__in" id="amtIn" inputmode="decimal" value="${d.amountStr}" placeholder="0">
+    </div>
+    <div class="amt__conv">${d.cur===t.base?'&nbsp;'
+      :`≈ ${t.sym}${fmt(base)} ${t.base} · 1 ${d.cur} = ${RATES[d.cur]}`}</div>
+
+    <div class="ways">
+      ${[['i-keyboard','手动','manual'],['i-receipt','小票','ocr'],
+         ['i-screenshot','截图','shot'],['i-mic','语音','voice']].map(([i,n,k])=>
+        `<div class="way ${d.src===k?'way--on':''}" data-way="${k}">
+          ${ico(i,'ico ico--lg way__ico')}<span class="way__txt">${n}</span></div>`).join('')}
+    </div>
+
+    <div class="sec">
+      <label class="row row--in">
+        <span class="row__k">项目</span>
+        <input class="row__in" id="nameIn" value="${d.name}" placeholder="点此输入">
+      </label>
+      <div class="row" data-act="cycle-cat">
+        <span class="row__k">类目</span>
+        <span class="row__v">${ico(catOf(d.cat).ico)} ${catOf(d.cat).name} <span class="arw">›</span></span>
+      </div>
+      <div class="row">
+        <span class="row__k">时间</span>
+        <span class="row__v text-faint">${d.at.slice(5,10).replace('-','.')} ${d.at.slice(11,16)}</span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec__hd"><span class="label">Paid by</span></div>
+      <div class="chips">${t.members.map(m=>
+        `<div class="chip ${d.payer===m.id?'chip--on':''}" data-payer="${m.id}">
+          <span class="dot" style="background:${d.payer===m.id?'var(--on-orange)':m.color}"></span>${m.name}</div>`).join('')}
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec__hd">
+        <span class="label">Split between · ${d.parts.length}</span>
+        <span class="label lnk" data-act="toggle-mode">${d.mode==='eq'?'均摊':'自定义'} ▾</span>
+      </div>
+      <div class="chips">${t.members.map(m=>{const on=d.parts.includes(m.id);
+        return `<div class="chip ${on?'chip--on':''}" data-part="${m.id}">
+          <span class="dot" style="background:${on?'var(--on-orange)':m.color}"></span>${m.name}</div>`}).join('')}
+      </div>
+      <div class="split" ${base&&d.parts.length?'':'hidden'}>${splitBox(t,d)}</div>
+    </div>
+
+    <div class="sec">
+      <input class="note" id="noteIn" value="${d.note||''}" placeholder="备注（可选）">
+    </div>
+    ${isEd?`<div class="sec"><div class="btn btn--text danger" data-act="del">删除这一笔</div></div>`:''}
+    <div style="height:16px"></div>
+  </div>`;
+}
+
+/* ── 识别确认（mock）── */
+const MOCK={
+  ocr:{name:'寿司大',cat:'food',cur:'JPY',amountStr:'37,000',conf:{Total:62,Date:71},
+    alts:{Total:['37,000','3,700','手动'],Date:['09.05','09.06']},
+    items:[['上握寿司 ×2',1600000,['me','li']],['海鲜丼 ×2',1100000,['wang','zhang']],
+      ['獺祭 純米大吟醸',680000,['me','wang']],['茶碗蒸 ×4',240000,['me','li','wang','zhang']],
+      ['お通し / 服务费',80000,['me','li','wang','zhang']]],
+    tag:'receipt',ico:'i-receipt'},
+  shot:{name:'CA167 · PVG→NRT ×4',cat:'fly',cur:'CNY',amountStr:'4,514.00',conf:{Total:94,Date:58},
+    alts:{Date:['07.28 支付日','09.02 出行日']},items:null,tag:'screenshot',ico:'i-screenshot',
+    hint:'机票的支付日与出行日不同 — 账目记支付日，时间轴按出行日排。'},
+  voice:{name:'出租车 · 涩谷→新宿',cat:'taxi',cur:'CNY',amountStr:'142.00',conf:{Total:88,Date:96},
+    alts:{},items:null,tag:'voice',ico:'i-mic',
+    heard:'刚才打车一百四十二，我付的，我和小李小王平摊'},
+};
+function fld(k,v,conf,alts){
+  const low=conf!==null&&conf<80;
+  return `<div class="f">
+    <div class="f__hd"><span class="f__k">${k}</span>
+      ${conf===null?'<span class="f__badge f__badge--ok">推断</span>'
+        :low?`<span class="f__badge f__badge--low">${conf}% 待确认</span>`
+        :`<span class="f__badge f__badge--ok">${conf}%</span>`}</div>
+    <div class="f__v">${low?`<span class="f__v--flag">${v}</span>`:v}</div>
+    ${low&&alts&&alts.length?`<div class="f__alt">${alts.map((a,i)=>
+      `<span class="f__opt ${i===0?'f__opt--on':''}">${a}</span>`).join('')}</div>`:''}
+  </div>`;
+}
+function vConfirm(){
+  const t=trip(), o=MOCK[S.editing.src]||MOCK.ocr;
+  const low=Object.entries(o.conf).filter(([,v])=>v<80);
+  return `
+  <div class="topbar">
+    <span class="topbar__back" data-go="add">←</span>
+    <span class="topbar__title">Confirm</span>
+    <span class="topbar__act" data-act="retry">重试</span>
+  </div>
+  <div class="body">
+    ${o.heard?`<div class="heard">${ico('i-mic')} 听到：「${o.heard}」</div>`
+    :`<div class="shotwrap">
+      <div class="shot">${ico(o.ico,'ico ico--xl shot__ico')}
+        <span class="shot__tag">${o.tag}</span>
+        <span class="shot__re">查看原图</span></div>
+      ${pm(t.city,'09.05','postmark--sm shot__pm')}
+    </div>`}
+
+    ${low.length?`<div class="conf">
+      <div class="conf__t">${low.length} 个字段识别置信度较低</div>
+      <div class="conf__s">已标出，确认后保存。精度不够不是问题 — 假装确定才是。</div>
+    </div>`:`<div class="conf conf--ok"><div class="conf__t">识别完成，请确认</div></div>`}
+
+    <div class="fields">
+      ${fld('Merchant',o.name,98)}
+      ${fld('Total',`${o.amountStr} ${o.cur}`,o.conf.Total,o.alts.Total)}
+      ${fld('Date','2026.09.05  19:42',o.conf.Date,o.alts.Date)}
+      ${fld('Category',catOf(o.cat).name,null)}
+    </div>
+    ${o.hint?`<div class="hint hint--warn">${o.hint}</div>`:''}
+
+    ${o.items?`<div class="items">
+      <div class="sec__hd"><span class="label">Itemized · ${o.items.length} items</span>
+        <span class="label lnk">逐项分账</span></div>
+      ${o.items.map((it,i)=>`<div class="item">
+        <span class="item__n">${it[0]}</span>
+        <span class="item__p">${fmt(it[1])}</span>
+        <span class="item__who">${t.members.map(m=>
+          `<span class="dot ${it[2].includes(m.id)?'dot--on':''}" style="background:${m.color}"
+            data-item="${i}" data-mid="${m.id}"></span>`).join('')}</span>
+      </div>`).join('')}
+      <div class="hint">点色点切换谁参与该项。清酒只有你和小王喝 — 张三小李不摊这 ¥334.56。</div>
+    </div>`:''}
+    <div style="height:16px"></div>
+  </div>`;
+}
+
+/* part 4：结算页 + 渲染 + 交互 */
+
+function vSettle(){
+  const t=trip(), st=stats(t);
+  const cs=[...new Set(t.expenses.map(e=>e.cur))].filter(c=>c!==t.base);
+  return `
+  <div class="topbar">
+    <span class="topbar__back" data-go="trip">←</span>
+    <span class="topbar__title">Settlement</span><span style="width:24px"></span>
+  </div>
+  <div class="hero hero--settle">
+    <div class="hero__bar">
+      <div class="hero__mark">${ico('i-compass')}</div>
+      <span class="label">${t.city} · ${t.members.length} pax</span>
+    </div>
+    <span class="hero-title">Settled</span>
+    <div class="hero__trip">${t.name}</div>
+    <div class="hero__meta">${md(t.from)} — ${md(t.to)}</div>
+  </div>
+  <div class="airmail"></div>
+  <div class="band">
+    <div class="band__top">
+      <div>
+        <div class="label label--on-orange">Total spent</div>
+        <div class="num band__total">${money(t.sym,st.total)}</div>
+        <div class="band__percap">人均 ${t.sym}${fmt(st.per)}</div>
+      </div>
+      ${pm('Settled',md(t.to),'postmark--sm','var(--on-orange)')}
+    </div>
+    <div class="plan">
+      <div class="plan__head"><span class="label label--on-orange">Transfers</span>
+        <span class="label label--on-orange">${st.tx.length} TX</span></div>
+      ${st.tx.length?st.tx.map((x,i)=>`<div class="tx reveal reveal--${i%3+1}">
+        <span class="tx__who">${nameOf(t,x.from)}</span>
+        <span class="tx__arrow">→</span>
+        <span class="tx__who">${nameOf(t,x.to)}</span>
+        <span class="num tx__amt"><span class="cur">${t.sym}</span>${fmt(x.amount)}</span>
+      </div>`).join(''):`<div class="tx"><span class="tx__who">已经平了，无需转账</span></div>`}
+      <div class="plan__note">${st.tx.length?`${st.tx.length} 笔转账即可结清`:'账目已平'}</div>
+    </div>
+    <div class="btn btn--white plan__btn" data-act="share">分享结算结果</div>
+    ${sky('skyline--on-orange band__sky')}
+  </div>
+  <div class="foot">
+    <div class="stats">
+      <div class="stat"><span class="label">垫付</span>
+        <span class="num stat__num"><span class="cur">${t.sym}</span>${fmt(st.paid)}</span></div>
+      <div class="stat"><span class="label">应摊</span>
+        <span class="num stat__num"><span class="cur">${t.sym}</span>${fmt(st.share)}</span></div>
+      <div class="stat"><span class="label">${st.mine>=0?'应收':'应付'}</span>
+        <span class="num stat__num ${st.mine>=0?'num--owed':'num--owe'}"><span class="cur">${t.sym}</span>${fmt(Math.abs(st.mine))}</span></div>
+    </div>
+    <div class="btn btn--outline settle__mark" data-act="mark">${t.archived?'已归档':'标记已结清'}</div>
+    <div class="perf"></div>
+    ${cs.length?`<div class="rates">
+      <span class="label">Exchange rates</span>
+      ${cs.map(c=>`<div class="rate"><span class="rate__code">${c}</span>
+        <span class="rate__val">1 = ${RATES[c]} ${t.base}</span></div>`).join('')}
+      <div class="rates__hint">每笔按记账当日汇率锁定，不随后续变动</div>
+    </div>`:''}
+    <span class="hand sign">safe travels</span>
+  </div>`;
+}
+
+function vFab(){
+  if(S.route==='home')return `<div class="btn btn--orange" data-act="new-trip">+ 新建行程</div>`;
+  if(S.route==='trip')return `<div class="btn btn--orange" data-act="new-exp">+ 记一笔</div>`;
+  if(S.route==='add')return `<div class="btn btn--orange" data-act="save">${S.editing.id?'保存修改':'保存这一笔'}</div>`;
+  if(S.route==='confirm')return `<div class="btn btn--orange" data-act="accept">确认并保存</div>`;
+  return '';
+}
+
+var render=function(){
+  const v={home:vHome,trip:vTrip,add:vAdd,confirm:vConfirm,settle:vSettle}[S.route];
+  document.getElementById('view').innerHTML=v();
+  const f=document.getElementById('fab'), h=vFab();
+  f.innerHTML=h; f.style.display=h?'block':'none';
+  let tp=document.getElementById('toast');
+  if(S.toast){
+    if(!tp){tp=document.createElement('div');tp.id='toast';tp.className='toast';document.body.appendChild(tp)}
+    tp.textContent=S.toast; requestAnimationFrame(()=>tp.classList.add('on'));
+  } else if(tp) tp.classList.remove('on');
+};
+
+/* ═══ 交互 ═══ */
+function blankExp(){
+  const t=trip(), n=new Date();
+  const iso=new Date(n.getTime()-n.getTimezoneOffset()*6e4).toISOString().slice(0,16);
+  return {id:null,name:'',cat:'other',cur:t.base,amountStr:'',payer:'me',
+    parts:t.members.map(m=>m.id),mode:'eq',custom:[],at:iso,src:'manual',note:''};
+}
+function syncInputs(){
+  const g=id=>document.getElementById(id);
+  if(g('amtIn'))S.editing.amountStr=g('amtIn').value;
+  if(g('nameIn'))S.editing.name=g('nameIn').value;
+  if(g('noteIn'))S.editing.note=g('noteIn').value;
+}
+
+/* 局部更新：输金额时不整页重绘，避免输入框失焦 */
+document.addEventListener('input',e=>{
+  if(!S.editing)return;
+  if(e.target.id==='nameIn'){S.editing.name=e.target.value; return}
+  if(e.target.id==='noteIn'){S.editing.note=e.target.value; return}
+  if(e.target.id!=='amtIn')return;
+  S.editing.amountStr=e.target.value;
+  const t=trip(), d=S.editing, {base}=centsOf(d,t);
+  const conv=document.querySelector('.amt__conv');
+  if(conv)conv.innerHTML=d.cur===t.base?'&nbsp;'
+    :`≈ ${t.sym}${fmt(base)} ${t.base} · 1 ${d.cur} = ${RATES[d.cur]}`;
+  const box=document.querySelector('.split');
+  if(box){
+    const html=splitBox(t,d);
+    box.innerHTML=html;
+    box.hidden=!html;
+  }
+  const sv=document.querySelector('.topbar__act[data-act="save"]');
+  if(sv)sv.classList.toggle('is-off',!base);
+});
+
+document.addEventListener('click',e=>{
+  const pick=k=>e.target.closest(`[${k}]`);
+  let x, t=trip();
+
+  if(x=pick('data-tab')){S.tab=x.dataset.tab; return render()}
+
+  if(x=pick('data-go')){
+    const r=x.dataset.go;
+    if(r==='trip'&&x.dataset.id){S.tripId=x.dataset.id; return go('trip')}
+    if(r==='edit'){
+      const ex=t.expenses.find(y=>y.id===x.dataset.id);
+      S.editing={id:ex.id,name:ex.name,cat:ex.cat,cur:ex.cur,amountStr:fmt(ex.amtOrig),
+        payer:ex.payers[0].memberId,parts:ex.splits.map(s=>s.memberId),
+        mode:'eq',custom:ex.splits,at:ex.at,src:ex.src||'manual',note:ex.note||''};
+      return go('add');
+    }
+    if(r==='add'){return go('add')}
+    return go(r);
+  }
+
+  if(x=pick('data-way')){
+    if(S.route==='add')syncInputs();
+    const k=x.dataset.way; S.editing.src=k;
+    return k==='manual'?render():go('confirm');
+  }
+  if(x=pick('data-payer')){syncInputs(); S.editing.payer=x.dataset.payer; return render()}
+  if(x=pick('data-part')){
+    syncInputs();
+    const p=S.editing.parts, i=p.indexOf(x.dataset.part);
+    i>=0?p.splice(i,1):p.push(x.dataset.part);
+    return render();
+  }
+  if(x=pick('data-item')){
+    const o=MOCK[S.editing.src]||MOCK.ocr, it=o.items[+x.dataset.item], m=x.dataset.mid;
+    const i=it[2].indexOf(m); i>=0?it[2].splice(i,1):it[2].push(m);
+    return render();
+  }
+
+  if(!(x=pick('data-act')))return;
+  const a=x.dataset.act;
+
+  if(a==='new-trip')return toast('Demo 固定三个行程，新建流程未接');
+  if(a==='new-exp'){S.editing=blankExp(); return go('add')}
+  if(a==='cycle-cur'){syncInputs();
+    S.editing.cur=CURS[(CURS.indexOf(S.editing.cur)+1)%CURS.length]; return render()}
+  if(a==='cycle-cat'){syncInputs();
+    S.editing.cat=CAT[(CAT.findIndex(c=>c.id===S.editing.cat)+1)%CAT.length].id; return render()}
+  if(a==='toggle-mode'){
+    syncInputs(); const d=S.editing;
+    d.mode=d.mode==='eq'?'custom':'eq';
+    if(d.mode==='custom'){
+      const {base}=centsOf(d,t);
+      d.custom=splitEqually(base,d.parts,d.payer);
+      toast('自定义分账：demo 沿用当前数值');
+    }
+    return render();
+  }
+  if(a==='save'){
+    syncInputs();
+    const d=S.editing, {orig,base}=centsOf(d,t);
+    if(!base)return toast('先填金额');
+    if(!d.parts.length)return toast('至少选一个分账人');
+    const obj={id:d.id||'x'+Date.now(),name:d.name||catOf(d.cat).name,cat:d.cat,at:d.at,
+      cur:d.cur,amtOrig:orig,rate:RATES[d.cur],amount:base,
+      payers:[{memberId:d.payer,amount:base}],splits:splitsOf(d,base),
+      src:d.src==='manual'?'':d.src,paidOn:'',note:d.note};
+    if(d.id){t.expenses[t.expenses.findIndex(y=>y.id===d.id)]=obj}
+    else t.expenses.unshift(obj);
+    go('trip'); return toast(d.id?'已更新':`已记 ${t.sym}${fmt(base)}`);
+  }
+  if(a==='del'){
+    t.expenses.splice(t.expenses.findIndex(y=>y.id===S.editing.id),1);
+    go('trip'); return toast('已删除');
+  }
+  if(a==='accept'){
+    const o=MOCK[S.editing.src]||MOCK.ocr;
+    Object.assign(S.editing,{name:o.name,cat:o.cat,cur:o.cur,amountStr:o.amountStr});
+    go('add'); return toast('已填入，确认后保存');
+  }
+  if(a==='retry')return toast('重新识别（demo 未接相机）');
+  if(a==='share'){
+    const st=stats(t);
+    const txt=[`【${t.name}】总支出 ${t.sym}${fmt(st.total)}，人均 ${t.sym}${fmt(st.per)}`,
+      ...st.tx.map(y=>`${nameOf(t,y.from)} → ${nameOf(t,y.to)}    ${t.sym}${fmt(y.amount)}`),
+      `共 ${st.tx.length} 笔转账即可结清`].join('\n');
+    if(navigator.clipboard)navigator.clipboard.writeText(txt)
+      .then(()=>toast('已复制，可粘贴到群里')).catch(()=>alert(txt));
+    else alert(txt);
+    return;
+  }
+  if(a==='mark'){
+    if(t.archived)return toast('这个行程已归档');
+    if(confirm('确认所有转账都已完成？\n标记后账本进入归档状态。')){
+      t.archived=true; go('home'); return toast('已归档');
+    }
+  }
+});
+
+/* part 5：动效驱动层 —— 覆盖 render/toast，注入触感 */
+
+/* ── 触觉反馈（移动端）── */
+const buzz=(ms=12)=>{try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}};
+
+/* ── 数字滚动 ── */
+function countUp(el,to,sym,dur=520){
+  const from=0, t0=performance.now();
+  const ease=x=>1-Math.pow(1-x,3);
+  function step(t){
+    const p=Math.min((t-t0)/dur,1);
+    const v=Math.round(from+(to-from)*ease(p));
+    el.innerHTML=`<span class="cur">${sym}</span>${fmtInt(v)}<span class="dec">.${fmtDec(v)}</span>`;
+    if(p<1)requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function animateBigNums(){
+  document.querySelectorAll('.act__num,.ov__num,.band__total').forEach(el=>{
+    const raw=el.textContent.replace(/[^\d.]/g,'');
+    const cents=Math.round(parseFloat(raw||0)*100);
+    const sym=el.textContent.trim().charAt(0);
+    if(cents>0)countUp(el,cents,sym);
+  });
+}
+
+/* ── 邮戳盖章 ── */
+function slam(city,date,note){
+  const d=document.createElement('div');
+  d.className='slam';
+  d.innerHTML=`<div class="slam__ring"></div>
+    <div class="postmark">
+      <span class="postmark__city">${city}</span>
+      <span class="postmark__line"></span>
+      <span class="postmark__date">${date}</span>
+    </div>${note?`<div class="slam__amt">${note}</div>`:''}`;
+  document.body.appendChild(d);
+  buzz(18);
+  setTimeout(()=>d.remove(),1300);
+}
+
+/* ── 墨点扩散（chip / dot 点击）── */
+function ink(el,ev){
+  const r=el.getBoundingClientRect();
+  const s=document.createElement('span');
+  s.className='ink';
+  s.style.left=((ev.clientX||r.left+r.width/2)-r.left)+'px';
+  s.style.top=((ev.clientY||r.top+r.height/2)-r.top)+'px';
+  el.appendChild(s);
+  setTimeout(()=>s.remove(),500);
+}
+
+/* ── 包装 render：转场方向 + 进场动画 ── */
+const _render=render;
+let _lastRoute=S.route;
+const DEPTH={home:0,trip:1,add:2,confirm:3,settle:2};
+render=function(){
+  const view=document.getElementById('view');
+  const back=(DEPTH[S.route]??0)<(DEPTH[_lastRoute]??0);
+  const changed=S.route!==_lastRoute;
+  _render();
+  if(changed){
+    view.classList.remove('pg-fwd','pg-back');
+    void view.offsetWidth;
+    view.classList.add(back?'pg-back':'pg-fwd');
+    animateBigNums();
+    _lastRoute=S.route;
+  }
+  // 保存按钮就绪微光
+  const fb=document.querySelector('.fab .btn[data-act="save"]');
+  if(fb&&S.editing){
+    const t=trip(),{base}=centsOf(S.editing,t);
+    fb.classList.toggle('btn--ready',!!base&&!!S.editing.parts.length);
+  }
+};
+
+/* ── 语音录制浮层 ── */
+const HEARD='刚才打车一百四十二，我付的，我和小李小王平摊';
+function recordOverlay(){
+  const o=document.createElement('div');
+  o.className='rec';
+  o.innerHTML=`<div class="rec__card">
+    <div class="rec__t">Listening</div>
+    <div class="wave rec__wave">${'<i></i>'.repeat(9)}</div>
+    <div class="rec__hint" id="recTxt"></div>
+    <div class="rec__cap">松手结束</div>
+  </div>`;
+  document.body.appendChild(o);
+  buzz(10);
+  const txt=o.querySelector('#recTxt');
+  let i=0;
+  const tick=setInterval(()=>{
+    i+=2;
+    txt.textContent='「'+HEARD.slice(0,i)+'」';
+    if(i>=HEARD.length){clearInterval(tick);
+      setTimeout(()=>{o.remove(); S.editing.src='voice'; go('confirm'); buzz(14)},420)}
+  },42);
+  return o;
+}
+
+/* ── 里程彩蛋：连点罗盘 3 次 ── */
+let eggN=0,eggT=null;
+function egg(){
+  const total=DB.trips.reduce((s,t)=>s+t.expenses.reduce((x,e)=>x+e.amount,0),0);
+  const cities=[...new Set(DB.trips.map(t=>t.city))];
+  const n=DB.trips.reduce((s,t)=>s+t.expenses.length,0);
+  let e=document.getElementById('egg');
+  if(!e){e=document.createElement('div');e.id='egg';e.className='egg';document.body.appendChild(e)}
+  e.innerHTML=`<div class="egg__t">Lifetime</div>
+    <div class="egg__n">¥${fmt(total)}</div>
+    <div class="egg__s">${cities.length} 座城市 · ${n} 笔记录<br>${cities.join(' · ')}</div>`;
+  requestAnimationFrame(()=>e.classList.add('on'));
+  clearTimeout(window.__eg);
+  window.__eg=setTimeout(()=>e.classList.remove('on'),3400);
+}
+
+/* ── 事件增强（捕获阶段先跑，不干扰原逻辑）── */
+document.addEventListener('pointerdown',e=>{
+  const c=e.target.closest('.chip,.way,.f__opt');
+  if(c){ink(c,e); buzz(8)}
+  const d=e.target.closest('[data-item]');
+  if(d){d.classList.remove('dot-pop');void d.offsetWidth;d.classList.add('dot-pop');buzz(6)}
+},true);
+
+document.addEventListener('click',e=>{
+  // 罗盘彩蛋
+  const mk=e.target.closest('.hero__mark');
+  if(mk){
+    mk.classList.remove('compass-spin');void mk.offsetWidth;mk.classList.add('compass-spin');
+    buzz(10);
+    eggN++; clearTimeout(eggT); eggT=setTimeout(()=>eggN=0,1400);
+    if(eggN>=3){eggN=0; egg()}
+    return;
+  }
+},true);
+
+/* ── 语音入口改为长按录制 ── */
+document.addEventListener('pointerdown',e=>{
+  const w=e.target.closest('[data-way="voice"]');
+  if(!w)return;
+  e.preventDefault();
+  let fired=false;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  const hold=setTimeout(()=>{fired=true; recordOverlay()},260);
+  const up=()=>{clearTimeout(hold);
+    document.removeEventListener('pointerup',up);
+    document.removeEventListener('pointercancel',up);
+    if(!fired){S.editing.src='voice'; go('confirm')}};
+  document.addEventListener('pointerup',up);
+  document.addEventListener('pointercancel',up);
+},true);
+
+/* ── OCR 扫描动画：进入 confirm 时短暂扫描 ── */
+const _go=go;
+go=function(r,p){
+  _go(r,p);
+  if(r==='confirm'){
+    const sh=document.querySelector('.shot');
+    if(sh){
+      sh.classList.add('scanning');
+      setTimeout(()=>sh.classList.remove('scanning'),1300);
+    }
+  }
+};
+
+/* ── 保存/归档时盖章 ── */
+const _toast=toast;
+toast=function(msg){
+  const t=trip();
+  if(/^已记 /.test(msg)){slam(t.city,md(new Date().toISOString()),msg.replace('已记 ','')); return}
+  if(msg==='已更新'){slam('Amended',md(new Date().toISOString()),''); return}
+  if(msg==='已归档'){slam('Settled',md(t.to),t.name); return}
+  _toast(msg);
+};
+
+render();
+
+</script>
+<script type="text/javascript" src="/accessproxy_statics/h5_fp.js" defer></script>
+<script type="text/javascript" src="/accessproxy_statics/wm.js" defer></script>
+</body></html>
